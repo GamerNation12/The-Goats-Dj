@@ -2,6 +2,11 @@
   "name": "dj-scratch-desktop",
   "version": "1.0.0",
   "description": "DJ Scratch Desktop — Discord music stats dashboard (v1 rebuild)",
+  "homepage": "https://github.com/GamerNation12/DJ-Scratch",
+  "author": {
+    "name": "GamerNation12",
+    "email": "GamerNation12@users.noreply.github.com"
+  },
   "main": "main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"electron .\"",
@@ -16,6 +21,7 @@
   "build": {
     "appId": "com.djscratch.desktop",
     "productName": "DJ Scratch",
+    "desktopName": "com.djscratch.desktop",
     "publish": [
       {
         "provider": "github",
@@ -39,7 +45,9 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "icon": "assets/icon.png",
-      "category": "Music"
+      "category": "Music",
+      "maintainer": "GamerNation12 <GamerNation12@users.noreply.github.com>",
+      "syncDesktopName": true
     },
     "nsis": {
       "oneClick": false,
