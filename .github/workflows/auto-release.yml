@@ -125,6 +125,7 @@ jobs:
           name: DJ Scratch ${{ steps.version_bump.outputs.NEW_VERSION }}
           draft: false
           prerelease: false
+          fail_on_unmatched_files: false
           # Upload everything that was successfully built in the previous steps
           files: |
             desktop-app/dist2/*.exe
