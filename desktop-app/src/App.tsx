@@ -163,7 +163,7 @@ export default function App() {
           {tab === 'friends' && <FriendsPage token={token} />}
           {tab === 'messages' && <MessagesPage token={token} user={user} />}
           {tab === 'admin' && <AdminPage token={token} />}
-          {tab === 'settings' && <SettingsPage onLogout={logout} />}
+          {tab === 'settings' && <SettingsPage token={token} user={user} onLogout={logout} />}
         </main>
         <PlayerBar token={token} lastfmTrack={lastfmTrack} spotify={np} refresh={refreshLight} />
       </div>

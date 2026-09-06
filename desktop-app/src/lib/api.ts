@@ -48,4 +48,20 @@ export const api = {
     request(`/api/spotify/control`, token, { method: 'POST', body: JSON.stringify({ action }) }),
   spotifyLike: (token: string | null, id: string, action: 'like' | 'unlike') =>
     request(`/api/spotify/like`, token, { method: 'POST', body: JSON.stringify({ id, action }) }),
+  getSettings: (token: string | null) =>
+    request<{
+      fmMode?: string;
+      showFeatures?: boolean;
+      privateMode?: boolean;
+      dataSource?: string;
+      timezone?: string;
+      showTrackPlaycount?: boolean;
+      displayName?: string;
+    }>(`/api/settings`, token),
+  saveSettings: (token: string | null, body: Record<string, unknown>) =>
+    request(`/api/settings`, token, { method: 'POST', body: JSON.stringify(body) }),
+  spotifyStatus: (token: string | null) =>
+    request<{ linked?: boolean }>(`/api/spotify/status`, token),
+  spotifyDisconnect: (token: string | null) =>
+    request(`/api/spotify/disconnect`, token, { method: 'POST', body: JSON.stringify({}) }),
 };
