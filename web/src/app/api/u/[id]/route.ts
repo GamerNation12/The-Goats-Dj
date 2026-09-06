@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import postgres from "postgres";
+import { discordAvatarUrl } from "@/lib/discord";
 
 const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY || "eee299142ac5fe73e5eb5dcd1c29bcae";
@@ -142,9 +143,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         if (discordRes.ok) {
           const dData = await discordRes.json();
           discordUser.name = dData.global_name || dData.username;
-          if (dData.avatar) {
-            discordUser.avatar = `https://cdn.discordapp.com/avatars/${r.user_id}/${dData.avatar}.png?size=256`;
-          }
+          discordUser.avatar = discordAvatarUrl(r.user_id, dData);
         }
       } catch (e) {
         console.error("Failed to fetch discord user:", e);

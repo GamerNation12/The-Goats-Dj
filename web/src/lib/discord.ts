@@ -1,3 +1,22 @@
+// Resolve a Discord avatar URL from a /users API payload.
+// Falls back to Discord's own default avatar so callers never get null
+// just because the user has no custom pfp.
+export function discordAvatarUrl(userId: string, dData: any): string | null {
+  try {
+    if (dData?.avatar) {
+      return `https://cdn.discordapp.com/avatars/${userId}/${dData.avatar}.png?size=256`;
+    }
+    const disc = dData?.discriminator;
+    if (disc && disc !== "0") {
+      const n = parseInt(disc, 10);
+      if (Number.isFinite(n)) return `https://cdn.discordapp.com/embed/avatars/${n % 5}.png`;
+    }
+    return `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(userId) >> 22n) % 6n)}.png`;
+  } catch {
+    return null;
+  }
+}
+
 export async function sendDiscordDM(userId: string, content: string, components?: any[], embeds?: any[]) {
   const token = process.env.DISCORD_TOKEN;
   if (!token) return false;

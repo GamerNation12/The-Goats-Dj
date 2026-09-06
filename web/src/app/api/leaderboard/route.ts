@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import postgres from "postgres";
+import { discordAvatarUrl } from "@/lib/discord";
 
 const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY || "eee299142ac5fe73e5eb5dcd1c29bcae";
@@ -11,12 +12,13 @@ export async function GET() {
   try {
     const sql = postgres(DB_URL!);
     
-    // Fetch all public users
+    // Fetch all public users (plus stored avatars as fallback when Discord rate-limits us)
     const rows = await sql`
-      SELECT user_id, lastfm_username, discord_username, display_name, data_source
-      FROM user_settings 
-      WHERE private_mode = FALSE 
-      AND discord_username IS NOT NULL
+      SELECT us.user_id, us.lastfm_username, us.discord_username, us.display_name, us.data_source, iu.avatar_url
+      FROM user_settings us
+      LEFT JOIN imported_users iu ON iu.id = us.user_id
+      WHERE us.private_mode = FALSE 
+      AND us.discord_username IS NOT NULL
     `;
 
     if (rows.length === 0) {
@@ -85,9 +87,10 @@ export async function GET() {
         if (discordRes.ok) {
           const dData = await discordRes.json();
           discordName = r.display_name || dData.global_name || dData.username || r.discord_username;
-          if (dData.avatar) {
-            discordAvatar = `https://cdn.discordapp.com/avatars/${r.user_id}/${dData.avatar}.png?size=256`;
-          }
+          discordAvatar = discordAvatarUrl(r.user_id, dData) || r.avatar_url || null;
+        } else {
+          // Discord rate-limited us — fall back to the stored avatar, not the site logo.
+          discordAvatar = r.avatar_url || null;
         }
       } catch (e) {
         console.error(`Failed to fetch data for user ${r.user_id}:`, e);
