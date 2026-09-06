@@ -3806,19 +3806,30 @@ async def process_insights(user):
     top_name, top_plays = None, 0
     if username:
         try:
-            data = await fetch_recent_tracks(username, 200)
-            tracks = (data or {}).get('recenttracks', {}).get('track', []) or []
             cutoff = _time.time() - 24 * 60 * 60
-            for t in tracks:
-                if isinstance(t.get('@attr'), dict) and t['@attr'].get('nowplaying') == 'true':
-                    continue
-                date = t.get('date') or {}
-                uts = date.get('uts') if isinstance(date, dict) else None
-                try:
-                    if uts and int(uts) >= cutoff:
-                        plays_24h += 1
-                except (TypeError, ValueError):
-                    continue
+            # No artificial cap: keep paging while the oldest fetched track is
+            # still inside the window (bounded at 5 pages = 1000 tracks).
+            page = 1
+            while page <= 5:
+                data = await fetch_recent_tracks(username, 200, page)
+                tracks = (data or {}).get('recenttracks', {}).get('track', []) or []
+                if not tracks:
+                    break
+                oldest_in_window = False
+                for t in tracks:
+                    if isinstance(t.get('@attr'), dict) and t['@attr'].get('nowplaying') == 'true':
+                        continue
+                    date = t.get('date') or {}
+                    uts = date.get('uts') if isinstance(date, dict) else None
+                    try:
+                        if uts and int(uts) >= cutoff:
+                            plays_24h += 1
+                            oldest_in_window = True
+                    except (TypeError, ValueError):
+                        continue
+                if not oldest_in_window:
+                    break
+                page += 1
         except Exception:
             pass
         try:
@@ -4061,7 +4072,7 @@ HELP_COMMAND_META = {
     "artistchart": ("Artist collage chart", "/artistchart [size] [period]"),
     "taste": ("Compare music taste with someone", "/taste [@user] • `,t`"),
     "live": ("What your friends are playing now", "/live • `,live`"),
-    "insights": ("24h plays, milestone & top-artist share", "/insights • `,insights`"),
+    "insights": ("24h plays, milestone & top-artist share", "/insights [@user] • `,insights [@user|id]`"),
     "share": ("Shareable link to your profile", "/share • `,share`"),
     "streak": ("Current play streak for an artist", "/streak [artist]"),
     "streakhistory": ("Past streaks (25+ plays)", "/streakhistory"),

@@ -596,11 +596,12 @@ class LastFmCog(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="insights", description="24h plays, milestone progress and top-artist share")
+    @app_commands.describe(user="Whose insights to view (default: you)")
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
-    async def insights_slash(self, interaction: discord.Interaction):
+    async def insights_slash(self, interaction: discord.Interaction, user: discord.User = None):
         await interaction.response.defer()
-        embed, _ = await self.bot.process_insights(interaction.user)
+        embed, _ = await self.bot.process_insights(user or interaction.user)
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="share", description="Get a shareable link to your DJ Scratch profile")
@@ -1041,8 +1042,9 @@ class LastFmCog(commands.Cog):
         await self._reply_and_delete(ctx, embed=embed)
 
     @commands.command(name="insights", aliases=["insight", "ins"])
-    async def insights_prefix(self, ctx):
-        embed, _ = await self.bot.process_insights(ctx.author)
+    async def insights_prefix(self, ctx, *, args: str = None):
+        target_user, _ = await get_target_user(ctx, args)
+        embed, _ = await self.bot.process_insights(target_user)
         await self._reply_and_delete(ctx, embed=embed)
 
     @commands.command(name="share", aliases=["shareprofile", "link"])
