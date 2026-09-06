@@ -20,6 +20,19 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
   const isOwner = status === "authenticated" && displayUsername && displayUsername === usernameParam;
 
   const [selectedTrack, setSelectedTrack] = useState<any>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const shareProfile = async () => {
+    const url = `${window.location.origin}/${encodeURIComponent(usernameParam)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(true);
+      toast.success("Profile link copied!");
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      toast.error("Could not copy link.");
+    }
+  };
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"profile" | "settings" | "suggestions" | "import" | "admin">("profile");
@@ -567,11 +580,18 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
                     Welcome back, <span className="text-indigo-400">{displayUsername}</span>
                   </h1>
                   <p className="text-zinc-400 text-lg">Manage your integration, preferences, and account data.</p>
+                  <button
+                    onClick={shareProfile}
+                    className="mt-4 inline-flex items-center gap-2 px-5 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-bold rounded-xl transition-all w-fit mx-auto md:mx-0"
+                  >
+                    {copiedLink ? "✓ Copied!" : "⧉ Share my profile"}
+                  </button>
                 </>
               ) : (
                 <>
                   <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white mb-2">{profile?.users?.[0]?.name || usernameParam}</h1>
                   <p className="text-indigo-400 text-sm font-semibold uppercase tracking-widest mb-4">DJ Scratch Profile</p>
+                  <div className="flex flex-wrap items-center gap-3 justify-center md:justify-start">
                   <a 
                     href={`https://www.last.fm/user/${profile?.lastfm_username || usernameParam}`} 
                     target="_blank" 
@@ -581,6 +601,13 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
                     <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M16.5 13.932c-1.353 0-2.457-1.127-2.457-2.52 0-1.391 1.104-2.518 2.457-2.518 1.35 0 2.454 1.127 2.454 2.518 0 1.393-1.104 2.52-2.454 2.52m-.032-7.593c-2.316 0-4.227 1.636-4.707 3.821h-.041l-.988-3.666H7.135l1.631 5.922c-.655 1.579-2.029 2.584-3.665 2.584-1.634 0-2.906-1.154-2.906-2.616 0-1.464 1.258-2.619 2.906-2.619.673 0 1.298.243 1.834.717l2.179-2.81c-1.077-.962-2.502-1.554-4.013-1.554-3.088 0-5.022 2.306-5.022 5.253 0 2.946 2.052 5.266 5.022 5.266 2.873 0 5.158-2.051 5.626-4.664h.043c.535 2.529 2.766 4.664 5.728 4.664 3.09 0 5.568-2.519 5.568-5.656 0-3.136-2.478-5.645-5.568-5.645"/></svg>
                     View on Last.fm
                   </a>
+                  <button
+                    onClick={shareProfile}
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-bold rounded-xl transition-all w-fit"
+                  >
+                    {copiedLink ? "✓ Copied!" : "⧉ Share profile"}
+                  </button>
+                  </div>
                 </>
               )}
             </div>
