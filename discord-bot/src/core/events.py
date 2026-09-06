@@ -723,6 +723,9 @@ async def setup_hook():
             bot.process_whoknowstrack = process_whoknowstrack
             bot.process_whoknowsalbum = process_whoknowsalbum
             bot.process_taste = process_taste
+            bot.process_live = process_live
+            bot.process_insights = process_insights
+            bot.process_share = process_share
             bot.process_suggestion = process_suggestion
             bot.get_help_embed = get_help_embed
             bot.process_crowns = process_crowns
