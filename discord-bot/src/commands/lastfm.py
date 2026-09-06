@@ -1040,7 +1040,7 @@ class LastFmCog(commands.Cog):
         embed, _ = await self.bot.process_live(ctx.author)
         await self._reply_and_delete(ctx, embed=embed)
 
-    @commands.command(name="insights", aliases=["insight", "ins", "stats"])
+    @commands.command(name="insights", aliases=["insight", "ins"])
     async def insights_prefix(self, ctx):
         embed, _ = await self.bot.process_insights(ctx.author)
         await self._reply_and_delete(ctx, embed=embed)
