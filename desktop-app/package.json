@@ -21,7 +21,6 @@
   "build": {
     "appId": "com.djscratch.desktop",
     "productName": "DJ Scratch",
-    "desktopName": "com.djscratch.desktop",
     "publish": [
       {
         "provider": "github",
