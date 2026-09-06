@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { API_BASE, APP_VERSION } from '../lib/config';
 import { api } from '../lib/api';
+import { manualCheck } from '../lib/updater';
 import type { JwtUser } from '../lib/types';
 import { Card, Spinner } from '../components/ui';
 
@@ -40,6 +41,7 @@ export default function SettingsPage({ token, user, onLogout }: { token: string 
   // Spotify link state.
   const [spLinked, setSpLinked] = useState<boolean | null>(null);
   const [spBusy, setSpBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('ds_polling', polling ? 'on' : 'off');
@@ -194,8 +196,29 @@ export default function SettingsPage({ token, user, onLogout }: { token: string 
           <h2 className="font-bold mb-2">App</h2>
           <p className="text-sm text-zinc-400">Version v{APP_VERSION} · API {API_BASE}</p>
           <div className="flex gap-2 mt-4">
-            <button onClick={() => window.open(`${API_BASE}/download`, '_blank')} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 font-bold hover:bg-white/10">
-              Check for updates
+            <button
+              onClick={() => {
+                setChecking(true);
+                toast.loading('Checking for updates…', { id: 'upd-check' });
+                manualCheck({
+                  onAvailable: () => {
+                    setChecking(false);
+                    toast.success('Update found — downloading now.', { id: 'upd-check' });
+                  },
+                  onUpToDate: () => {
+                    setChecking(false);
+                    toast.success("You're up to date.", { id: 'upd-check' });
+                  },
+                  onError: (m) => {
+                    setChecking(false);
+                    toast.error(m, { id: 'upd-check' });
+                  },
+                });
+              }}
+              disabled={checking}
+              className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 font-bold hover:bg-white/10 disabled:opacity-50"
+            >
+              {checking ? 'Checking…' : 'Check for updates'}
             </button>
             <button onClick={onLogout} className="px-5 py-2.5 rounded-xl bg-red-500/10 text-red-300 border border-red-500/30 font-bold hover:bg-red-500/20">
               Log out

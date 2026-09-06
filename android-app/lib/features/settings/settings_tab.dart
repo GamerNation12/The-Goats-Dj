@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/auth_store.dart';
 import '../../core/config.dart';
 import '../../widgets/states.dart';
+import '../../widgets/update_flow.dart';
 import '../auth/login_screen.dart';
 
 class SettingsTab extends StatefulWidget {
@@ -230,6 +231,16 @@ class _SettingsTabState extends State<SettingsTab> {
               ),
               const SizedBox(height: 24),
               Text('DJ Scratch v$_version', style: GoogleFonts.inter(color: Colors.white54)),
+              const SizedBox(height: 10),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                tileColor: Colors.white.withOpacity(0.04),
+                title: Text('Check for updates', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                subtitle: Text('Downloads and installs in-app when available',
+                    style: GoogleFonts.inter(color: Colors.white54, fontSize: 12)),
+                trailing: const Icon(Icons.system_update, color: Color(0xFF0AB5CD)),
+                onTap: () => runUpdateFlow(context),
+              ),
               const SizedBox(height: 10),
               ListTile(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

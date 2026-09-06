@@ -89,9 +89,20 @@ function setupUpdater() {
           if (r.response === 0) autoUpdater.quitAndInstall();
         });
     });
+    autoUpdater.on('update-not-available', (info) => {
+      mainWindow?.webContents.send('djscratch:update-not-available', info || {});
+    });
     autoUpdater.on('error', (err) => {
       mainWindow?.webContents.send('djscratch:update-error', String((err && err.message) || err));
     });
+
+    // Renderer-triggered manual check (Settings → Check for updates).
+    try {
+      const { ipcMain } = require('electron');
+      ipcMain.on('djscratch:check-updates', () => {
+        autoUpdater.checkForUpdatesAndNotify();
+      });
+    } catch {}
 
     autoUpdater.checkForUpdatesAndNotify();
     setInterval(() => autoUpdater.checkForUpdatesAndNotify(), 6 * 60 * 60 * 1000);

@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('djscratch', {
   onUpdateProgress: (cb) => ipcRenderer.on('djscratch:update-progress', (_e, v) => cb(v)),
   onUpdateDownloaded: (cb) => ipcRenderer.on('djscratch:update-downloaded', (_e, v) => cb(v)),
   onUpdateError: (cb) => ipcRenderer.on('djscratch:update-error', (_e, v) => cb(v)),
+  onUpdateNotAvailable: (cb) => ipcRenderer.on('djscratch:update-not-available', (_e, v) => cb(v)),
+  checkForUpdates: () => ipcRenderer.send('djscratch:check-updates'),
   reportNowPlaying: (label) => ipcRenderer.send('djscratch:now-playing', label || ''),
 });
 
