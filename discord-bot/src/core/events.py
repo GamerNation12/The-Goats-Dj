@@ -309,36 +309,66 @@ async def get_album_based_color(user_id, image_url=None):
 _ITUNES_CACHE: dict = {}
 
 
-async def get_album_image_url(artist, album):
-    """Try to fetch album art URL from iTunes Search API (no key required)."""
+async def _itunes_album_search(session_get, term, limit=5):
+    """Raw iTunes album search. Returns the results list (possibly empty)."""
     import aiohttp
+    params = {"term": term, "media": "music", "entity": "album", "limit": limit}
+    async with session_get("https://itunes.apple.com/search", params=params, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+        if resp.status == 200:
+            data = await resp.json()
+            return data.get("results") or []
+    return []
+
+
+async def get_album_image_url(artist, album):
+    """Album art URL from iTunes Search API (no key required).
+
+    Two stages: "artist + album" first, then album-only (iTunes is strict
+    about combined terms, so theatrical/pop tracks often miss stage one).
+    The album-only fallback only accepts a result whose collection name
+    actually contains the requested album — right name, maybe an edition
+    off — never a random record.
+    """
+    import aiohttp
+    import re
+    norm = lambda x: re.sub(r'[^a-z0-9]', '', (x or '').lower())
     key = f"{artist.lower()}\x00{album.lower()}"
     now = _ctime.monotonic()
     entry = _ITUNES_CACHE.get(key)
     if entry and entry[1] > now:
         return entry[0]
+
+    def _store(url):
+        _ITUNES_CACHE[key] = (url, now + 86400)
+        if len(_ITUNES_CACHE) > 2000:
+            _ITUNES_CACHE.pop(next(iter(_ITUNES_CACHE)))
+        return url
+
+    def _art(r):
+        return (r.get("artworkUrl100", "") or "").replace("100x100bb", "300x300bb")
+
     try:
-        params = {"term": f"{artist} {album}", "media": "music", "entity": "album", "limit": 1}
         session = getattr(bot, 'session', None)
         if session is None or getattr(session, 'closed', True):
             async with aiohttp.ClientSession() as _tmp:
-                async with _tmp.get("https://itunes.apple.com/search", params=params, timeout=aiohttp.ClientTimeout(total=3)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data.get("results"):
-                            url = data["results"][0].get("artworkUrl100", "").replace("100x100bb", "300x300bb")
-                            _ITUNES_CACHE[key] = (url, now + 86400)
-                            return url
+                results = await _itunes_album_search(_tmp.get, f"{artist} {album}")
+                if results and _art(results[0]):
+                    return _store(_art(results[0]))
+                if album and (results2 := await _itunes_album_search(_tmp.get, album)):
+                    wanted = norm(album)
+                    for r in results2:
+                        if wanted and wanted in norm(r.get("collectionName")) and _art(r):
+                            return _store(_art(r))
             return None
-        async with session.get("https://itunes.apple.com/search", params=params, timeout=aiohttp.ClientTimeout(total=3)) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data.get("results"):
-                    url = data["results"][0].get("artworkUrl100", "").replace("100x100bb", "300x300bb")
-                    _ITUNES_CACHE[key] = (url, now + 86400)
-                    if len(_ITUNES_CACHE) > 2000:
-                        _ITUNES_CACHE.pop(next(iter(_ITUNES_CACHE)))
-                    return url
+        results = await _itunes_album_search(session.get, f"{artist} {album}")
+        if results and _art(results[0]):
+            return _store(_art(results[0]))
+        if album:
+            results2 = await _itunes_album_search(session.get, album)
+            wanted = norm(album)
+            for r in results2:
+                if wanted and wanted in norm(r.get("collectionName")) and _art(r):
+                    return _store(_art(r))
     except Exception:
         pass
     return None
@@ -2495,7 +2525,25 @@ async def process_fm(ctx_int, user, mode="full", track_data=None):
                 return artist, song
                 
             img, (artist, song) = await asyncio.gather(do_deezer(), do_features())
-                
+
+            # Final fallback: iTunes album lookup (uses the album name, which
+            # Spotify/Deezer track searches don't). Covers tracks with no
+            # artwork anywhere else instead of showing no thumbnail at all.
+            if not img or "2a96cbd8b46e442fc41c2b86b821562f" in img:
+                try:
+                    itunes_img = await get_album_image_url(raw_artist, album)
+                    if itunes_img:
+                        img = itunes_img
+                except Exception:
+                    pass
+
+            if isinstance(img, str):
+                img = img.strip()
+                if img.startswith("http://"):
+                    img = "https://" + img[len("http://"):]
+            if not img:
+                print(f">>> No artwork found for '{raw_artist} - {raw_song}' [{album}] (user {username})")
+
             if t_info and 'track' in t_info and 'userplaycount' in t_info['track']:
                 track_plays = int(t_info['track']['userplaycount'])
                 
