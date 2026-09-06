@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { PERIODS, type Period } from '../lib/config';
+import { toast } from 'react-hot-toast';
+import { API_BASE, PERIODS, type Period } from '../lib/config';
 import { api } from '../lib/api';
 import type { UserStats } from '../lib/types';
 import { Card, Empty, ErrorBox, SectionTitle, Spinner } from '../components/ui';
@@ -68,6 +69,20 @@ export default function DashboardPage({ token, username }: { token: string | nul
           </select>
           <button onClick={load} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-bold">
             Refresh
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(`${API_BASE}/${encodeURIComponent(username)}`);
+                toast.success('Profile link copied!');
+              } catch {
+                toast.error('Could not copy link.');
+              }
+            }}
+            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-bold"
+            title="Copy your public profile link"
+          >
+            Share
           </button>
         </div>
       </div>

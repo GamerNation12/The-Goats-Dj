@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -90,6 +91,20 @@ class _DashboardTabState extends State<DashboardTab> {
                 style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
                 items: AppConfig.periods.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
                 onChanged: (v) { if (v != null) { setState(() => _period = v); _load(); } },
+              ),
+              IconButton(
+                icon: const Icon(LucideIcons.share2, color: Colors.white54, size: 20),
+                tooltip: 'Copy profile link',
+                onPressed: () async {
+                  final name = AuthStore.canonicalName((_user?['name'] ?? '') as String);
+                  if (name.isEmpty) return;
+                  await Clipboard.setData(ClipboardData(text: '${AppConfig.apiBase}/${Uri.encodeComponent(name)}'));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Profile link copied!'), backgroundColor: Color(0xFF0AB5CD)),
+                    );
+                  }
+                },
               ),
             ]),
             const SizedBox(height: 16),
