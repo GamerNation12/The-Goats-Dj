@@ -3702,6 +3702,175 @@ async def process_taste(guild, user1, user2):
     embed = Theme.get_embed(description=desc, color=LASTFM_COLOR)
     embed.set_author(name=f"Top artist comparison — {format_name(user1)} vs {format_name(user2)}")
     return embed, None
+
+async def _resolve_live_entry(fid, lname):
+    """Fetch one friend's current/recent track. Returns a dict or None on failure."""
+    from src.utils.api import fetch_now_playing
+    try:
+        data = await fetch_now_playing(lname, 1)
+        tracks = (data or {}).get('recenttracks', {}).get('track', [])
+        if not tracks:
+            return None
+        t = tracks[0]
+        artist = t.get('artist', {})
+        entry = {
+            'track': t.get('name', 'Unknown'),
+            'artist': artist.get('#text', '') if isinstance(artist, dict) else str(artist),
+            'live': isinstance(t.get('@attr'), dict) and t['@attr'].get('nowplaying') == 'true',
+            'uts': None,
+        }
+        date = t.get('date') or {}
+        if isinstance(date, dict) and date.get('uts'):
+            try:
+                entry['uts'] = int(date['uts'])
+            except (TypeError, ValueError):
+                pass
+        return entry
+    except Exception:
+        return None
+
+async def process_live(user):
+    """What your DJ Scratch friends are playing right now."""
+    from src.core.database import get_friends, get_local_total_plays
+    friends = await get_friends(user.id)
+    accepted = [f for f in (friends or []) if f.get('status') == 'accepted' and str(f.get('id')) != str(user.id)]
+    if not accepted:
+        if (await get_local_total_plays(user.id)) == 0 and not await get_lastfm_username(user.id):
+            return Theme.get_error_embed(description="Link Last.fm with `/login` and add friends with `/social addfriend` first!"), None
+        return Theme.get_error_embed(description="You have no DJ Scratch friends yet! Add some with `/social addfriend` or on the website."), None
+
+    accepted = accepted[:10]
+    lnames = await asyncio.gather(*[get_lastfm_username(f['id']) for f in accepted])
+    coros, order = [], []
+    for i, (f, lname) in enumerate(zip(accepted, lnames)):
+        if lname:
+            coros.append(_resolve_live_entry(f['id'], lname))
+            order.append(i)
+    resolved = await asyncio.gather(*coros) if coros else []
+    entries: list = [None] * len(accepted)
+    for i, e in zip(order, resolved):
+        entries[i] = e
+
+    # Best-effort Discord display names (falls back to Last.fm username).
+    names = []
+    for f, lname in zip(accepted, lnames):
+        try:
+            du = await bot.fetch_user(int(f['id']))
+            names.append(format_name(du))
+        except Exception:
+            names.append(lname or "Unknown")
+
+    live_lines, recent_lines = [], []
+    for name, entry in zip(names, entries):
+        if not entry:
+            continue
+        label = f"**{name}** — {entry['track']} — {entry['artist']}"
+        if entry['live']:
+            live_lines.append(f"🟢 {label}")
+        else:
+            suffix = ""
+            if entry['uts']:
+                try:
+                    suffix = f" (<t:{entry['uts']}:R>)"
+                except Exception:
+                    pass
+            recent_lines.append(f"⚪ {label}{suffix}")
+
+    if not live_lines and not recent_lines:
+        return Theme.get_error_embed(description="None of your friends have scrobbled anything visible right now."), None
+
+    desc = ""
+    if live_lines:
+        desc += "**Live now**\n" + "\n".join(live_lines[:10]) + "\n\n"
+    if recent_lines:
+        desc += "**Recently played**\n" + "\n".join(recent_lines[:10])
+    embed = Theme.get_embed(description=desc.strip(), color=LASTFM_COLOR)
+    embed.set_author(name=f"Friends live — {format_name(user)}")
+    return embed, None
+
+async def process_insights(user):
+    """24h plays, milestone progress and top-artist share."""
+    import math
+    import time as _time
+    from src.utils.api import fetch_recent_tracks, fetch_user_profile, fetch_top_artists
+    username = await get_lastfm_username(user.id)
+    local_total = await get_local_total_plays(user.id)
+    if not username and local_total == 0:
+        return Theme.get_error_embed(description=f"{format_name(user)} has not linked their Last.fm account or imported data."), None
+
+    plays_24h = 0
+    total = local_total
+    top_name, top_plays = None, 0
+    if username:
+        try:
+            data = await fetch_recent_tracks(username, 200)
+            tracks = (data or {}).get('recenttracks', {}).get('track', []) or []
+            cutoff = _time.time() - 24 * 60 * 60
+            for t in tracks:
+                if isinstance(t.get('@attr'), dict) and t['@attr'].get('nowplaying') == 'true':
+                    continue
+                date = t.get('date') or {}
+                uts = date.get('uts') if isinstance(date, dict) else None
+                try:
+                    if uts and int(uts) >= cutoff:
+                        plays_24h += 1
+                except (TypeError, ValueError):
+                    continue
+        except Exception:
+            pass
+        try:
+            info = await fetch_user_profile(username)
+            if info and 'user' in info:
+                total = max(total, int(info['user'].get('playcount', 0)))
+        except Exception:
+            pass
+        try:
+            tops = await fetch_top_artists(username, 'overall', 5)
+            artists = (tops or {}).get('topartists', {}).get('artist', []) or []
+            if artists:
+                top_name = artists[0].get('name', 'Unknown')
+                top_plays = int(artists[0].get('playcount', 0))
+        except Exception:
+            pass
+
+    milestone = 10 if total < 10 else 10 ** math.ceil(math.log10(total + 1))
+    pct = min(100.0, (total / milestone) * 100) if milestone else 0.0
+    filled = max(0, min(10, round(pct / 10)))
+    bar = "█" * filled + "░" * (10 - filled)
+    share = (top_plays / total * 100) if total > 0 and top_plays else 0.0
+
+    desc = (
+        f"⏱️ **Last 24 hours:** {plays_24h:,} plays\n"
+        f"🎧 **Total scrobbles:** {total:,}\n"
+        f"🎯 **Next milestone:** {milestone:,} ({milestone - total:,} to go)\n"
+        f"`{bar}` {pct:.1f}%\n"
+    )
+    if top_name:
+        desc += f"⭐ **Top artist:** {top_name} — {top_plays:,} plays ({share:.1f}% of total)"
+    embed = Theme.get_embed(description=desc, color=LASTFM_COLOR)
+    embed.set_author(name=f"Listening insights — {format_name(user)}")
+    return embed, None
+
+async def process_share(user):
+    """Shareable DJ Scratch profile link card."""
+    username = await get_lastfm_username(user.id)
+    safe_name = urllib.parse.quote(format_name(user).replace(' ', '-'))
+    profile_url = f"https://dj-scratch.vercel.app/{safe_name}"
+
+    class ShareLinksView(discord.ui.View):
+        def __init__(self):
+            super().__init__(timeout=None)
+            self.add_item(discord.ui.Button(label="DJ Scratch Profile", style=discord.ButtonStyle.link, url=profile_url))
+            if username:
+                self.add_item(discord.ui.Button(label="Last.fm Profile", style=discord.ButtonStyle.link, url=f"https://www.last.fm/user/{username}"))
+
+    desc = (
+        f"Send your friends here to see your stats, tops and recents:\n\n"
+        f"🔗 {profile_url}"
+    )
+    embed = Theme.get_embed(description=desc, color=LASTFM_COLOR)
+    embed.set_author(name=f"Share {format_name(user)}'s profile")
+    return embed, ShareLinksView()
 async def process_suggestion(ctx_int, user, suggestion_text, is_bug=False):
     try:
         title = "Bug Report" if is_bug else "Bot Suggestion"
@@ -3888,6 +4057,9 @@ HELP_COMMAND_META = {
     "chart": ("Album collage chart (3x3–5x5)", "/chart [size] [period] • `,chart 3x3`"),
     "artistchart": ("Artist collage chart", "/artistchart [size] [period]"),
     "taste": ("Compare music taste with someone", "/taste [@user] • `,t`"),
+    "live": ("What your friends are playing now", "/live • `,live`"),
+    "insights": ("24h plays, milestone & top-artist share", "/insights • `,insights`"),
+    "share": ("Shareable link to your profile", "/share • `,share`"),
     "streak": ("Current play streak for an artist", "/streak [artist]"),
     "streakhistory": ("Past streaks (25+ plays)", "/streakhistory"),
     # Server
@@ -3942,7 +4114,7 @@ HELP_CATEGORIES = {
     "nowplaying": {
         "label": "🎧 Now Playing & Stats", "emoji": "🎧", "title": "🎧 Now Playing & Stats",
         "tagline": "What you're spinning right now and your personal stats.",
-        "commands": ["fm", "profile", "taste", "streak", "streakhistory", "chart", "artistchart"],
+        "commands": ["fm", "profile", "taste", "live", "insights", "share", "streak", "streakhistory", "chart", "artistchart"],
     },
     "tops": {
         "label": "📊 Tops & History", "emoji": "📊", "title": "📊 Tops & History",

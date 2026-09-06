@@ -587,6 +587,33 @@ class LastFmCog(commands.Cog):
         if embed: await interaction.followup.send(embed=embed)
         else: await interaction.followup.send(embed=err)
 
+    @app_commands.command(name="live", description="See what your DJ Scratch friends are playing now")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def live_slash(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        embed, _ = await self.bot.process_live(interaction.user)
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="insights", description="24h plays, milestone progress and top-artist share")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def insights_slash(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        embed, _ = await self.bot.process_insights(interaction.user)
+        await interaction.followup.send(embed=embed)
+
+    @app_commands.command(name="share", description="Get a shareable link to your DJ Scratch profile")
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+    async def share_slash(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        embed, view = await self.bot.process_share(interaction.user)
+        if view:
+            await interaction.followup.send(embed=embed, view=view)
+        else:
+            await interaction.followup.send(embed=embed)
+
     @app_commands.command(name="suggest", description="Send a suggestion directly to the developer")
     @app_commands.describe(suggestion="Your idea or feedback for the bot")
     @app_commands.allowed_installs(guilds=True, users=True)
@@ -1007,6 +1034,24 @@ class LastFmCog(commands.Cog):
         embed, err = await self.bot.process_taste(ctx.guild, ctx.author, user)
         if embed: await self._reply_and_delete(ctx, embed=embed)
         else: await self._reply_and_delete(ctx, err)
+
+    @commands.command(name="live", aliases=["friendslive", "nowlive"])
+    async def live_prefix(self, ctx):
+        embed, _ = await self.bot.process_live(ctx.author)
+        await self._reply_and_delete(ctx, embed=embed)
+
+    @commands.command(name="insights", aliases=["insight", "ins", "stats"])
+    async def insights_prefix(self, ctx):
+        embed, _ = await self.bot.process_insights(ctx.author)
+        await self._reply_and_delete(ctx, embed=embed)
+
+    @commands.command(name="share", aliases=["shareprofile", "link"])
+    async def share_prefix(self, ctx):
+        embed, view = await self.bot.process_share(ctx.author)
+        if view:
+            await self._reply_and_delete(ctx, embed=embed, view=view)
+        else:
+            await self._reply_and_delete(ctx, embed=embed)
 
     @commands.command(name="suggest", aliases=["suggestion", "su", "sug"])
     async def suggest_prefix(self, ctx, *, suggestion: str = None):
