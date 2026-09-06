@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required for one-tap in-app APK updates (system installer prompt) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <application
         android:label="DJ Scratch"
         android:name="${applicationName}"
@@ -46,6 +48,16 @@
                 <data android:scheme="https" android:host="dj-scratch.vercel.app" android:pathPrefix="/open" />
             </intent-filter>
         </activity>
+        <!-- FileProvider for one-tap APK installs (in-app updater) -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileProvider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,10 +28,22 @@ class _DashboardTabState extends State<DashboardTab> {
   void initState() {
     super.initState();
     _load();
+    // Silent background refresh keeps recents live without a spinner flash.
+    _poll = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _load(silent: true);
+    });
   }
 
-  Future<void> _load() async {
-    setState(() { _loading = true; _error = ''; });
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Timer? _poll;
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() { _loading = true; _error = ''; });
     try {
       final token = await AuthStore.readToken();
       _user = token == null ? null : AuthStore.decode(token);
@@ -40,12 +53,15 @@ class _DashboardTabState extends State<DashboardTab> {
       final data = await api.getJson('/api/u/${Uri.encodeComponent(name)}?period=$_period');
       if (data['error'] != null) throw ApiException(data['error'].toString(), 400);
       if (!mounted) return;
-      setState(() { _stats = (data['stats'] as Map?)?.cast<String, dynamic>(); _loading = false; });
+      setState(() { _stats = (data['stats'] as Map?)?.cast<String, dynamic>(); _loading = false; _error = ''; });
     } on ApiException catch (e) {
       if (!mounted) return;
+      // Silent polls never wipe good data with an error screen.
+      if (silent) return;
       setState(() { _error = e.message; _loading = false; });
     } catch (_) {
       if (!mounted) return;
+      if (silent) return;
       setState(() { _error = 'Connection error.'; _loading = false; });
     }
   }

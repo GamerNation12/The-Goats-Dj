@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { API_BASE, PERIODS, type Period } from '../lib/config';
+import { API_BASE, PERIODS, POLL_MS, type Period } from '../lib/config';
 import { api } from '../lib/api';
 import type { UserStats } from '../lib/types';
 import { Card, Empty, ErrorBox, SectionTitle, Spinner } from '../components/ui';
@@ -11,14 +11,19 @@ export default function DashboardPage({ token, username }: { token: string | nul
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+  const [tick, setTick] = useState(0); // re-renders the "updated Xs ago" label
+  const periodRef = useRef(period);
+  periodRef.current = period;
 
   const load = async () => {
     if (!token) return;
     setLoading(true);
     setError('');
     try {
-      const data = await api.getProfile(username, token, period);
+      const data = await api.getProfile(username, token, periodRef.current);
       setStats((data.stats || {}) as UserStats);
+      setUpdatedAt(Date.now());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -26,10 +31,45 @@ export default function DashboardPage({ token, username }: { token: string | nul
     }
   };
 
+  // Silent background refresh: keeps recents live without flashing a spinner.
+  // Skipped while the tab is hidden or when the user disabled auto-refresh.
+  const quietLoad = async () => {
+    if (!token || document.hidden) return;
+    if (localStorage.getItem('ds_polling') === 'off') return;
+    try {
+      const data = await api.getProfile(username, token, periodRef.current);
+      setStats((data.stats || {}) as UserStats);
+      setError('');
+      setUpdatedAt(Date.now());
+    } catch {
+      // Keep showing last good data; the App shell shows the offline state.
+    }
+  };
+  const quietRef = useRef(quietLoad);
+  quietRef.current = quietLoad;
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
+
+  useEffect(() => {
+    const id = setInterval(() => quietRef.current(), POLL_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const updatedAgo = updatedAt == null ? '' : (() => {
+    const s = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000));
+    void tick;
+    if (s < 5) return 'just now';
+    if (s < 60) return `${s}s ago`;
+    return `${Math.floor(s / 60)}m ago`;
+  })();
 
   const recents = (stats?.recentTracks || []).filter(
     (t) => !query || `${t.name} ${t.artist}`.toLowerCase().includes(query.toLowerCase())
@@ -57,6 +97,7 @@ export default function DashboardPage({ token, username }: { token: string | nul
           Welcome back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">{username}</span>
         </h1>
         <div className="flex gap-2 items-center">
+          {updatedAgo && <span className="text-xs text-zinc-500 font-semibold mr-1">Updated {updatedAgo} · auto</span>}
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value as Period)}
