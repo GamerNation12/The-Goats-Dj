@@ -11,7 +11,7 @@ export function discordAvatarUrl(userId: string, dData: any): string | null {
       const n = parseInt(disc, 10);
       if (Number.isFinite(n)) return `https://cdn.discordapp.com/embed/avatars/${n % 5}.png`;
     }
-    return `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(userId) >> 22n) % 6n)}.png`;
+    return `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(userId) >> BigInt(22)) % BigInt(6))}.png`;
   } catch {
     return null;
   }
