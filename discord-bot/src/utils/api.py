@@ -166,9 +166,19 @@ async def fetch_user_artist_tracks_lastfm(u, artist):
     async def _one(t):
         async with sem:
             try:
-                return await fetch_track_info(u, artist, t)
+                res = await fetch_track_info(u, artist, t)
+                if res and 'track' in res:
+                    return res
             except Exception:
-                return None
+                pass
+            # Spotify-style multi-artist strings ("A, B") never resolve on
+            # Last.fm — retry with just the lead artist before giving up.
+            if ',' in artist:
+                try:
+                    return await fetch_track_info(u, artist.split(',')[0].strip(), t)
+                except Exception:
+                    return None
+            return None
 
     results = await asyncio.gather(*[_one(t) for t in top_tracks], return_exceptions=True)
     
