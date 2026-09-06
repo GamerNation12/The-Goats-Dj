@@ -111,6 +111,8 @@ class _DashboardTabState extends State<DashboardTab> {
             ]),
             const SizedBox(height: 20),
             _statHero(),
+            const SizedBox(height: 12),
+            _insightsRow(),
             const SizedBox(height: 24),
             const SectionHeader(title: 'Recent tracks'),
             const SizedBox(height: 12),
@@ -152,6 +154,81 @@ class _DashboardTabState extends State<DashboardTab> {
         const Icon(LucideIcons.barChart3, color: Color(0xFF0AB5CD), size: 40),
       ]),
     );
+  }
+
+  Widget _insightsRow() {
+    final all = ((_stats?['recentTracks'] as List?) ?? []).cast<Map>();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final plays24h = all.where((t) {
+      final uts = int.tryParse('${t['date'] ?? ''}') ?? 0;
+      return t['nowPlaying'] != true && uts > 0 && nowMs - uts * 1000 < 24 * 60 * 60 * 1000;
+    }).length;
+    final uniqueArtists = all.map((t) => '${t['artist'] ?? ''}'.toLowerCase()).where((s) => s.isNotEmpty).toSet().length;
+    final tops = ((_stats?['topArtists'] as List?) ?? []).cast<Map>();
+    final total = int.tryParse('${_stats?['playcount'] ?? 0}') ?? 0;
+    final topPlays = tops.isEmpty ? 0 : (int.tryParse('${tops.first['playcount'] ?? 0}') ?? 0);
+    final share = total > 0 ? (topPlays / total * 100).clamp(0, 100) : 0.0;
+    final next = total < 10 ? 10 : _nextPow10(total);
+
+    Widget tile(String label, String value, String sub) {
+      return Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: GoogleFonts.inter(fontSize: 10, color: Colors.white54, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text(value, style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(sub, style: GoogleFonts.inter(fontSize: 11, color: Colors.white54), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+      );
+    }
+
+    return Column(children: [
+      Row(children: [
+        tile('24H PLAYS', '$plays24h', 'scrobbles'),
+        const SizedBox(width: 10),
+        tile('ROTATION', '$uniqueArtists', 'artists'),
+        const SizedBox(width: 10),
+        tile('TOP SHARE', '${share.toStringAsFixed(1)}%', tops.isEmpty ? '—' : '${tops.first['name']}'),
+      ]),
+      const SizedBox(height: 10),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.07)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${(next - total)} PLAYS TO ${(next)}', style: GoogleFonts.inter(fontSize: 10, color: Colors.white54, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (total / next).clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: Colors.white.withOpacity(0.1),
+              valueColor: const AlwaysStoppedAnimation(Color(0xFF0AB5CD)),
+            ),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  int _nextPow10(int total) {
+    var p = 10;
+    while (p <= total) {
+      p *= 10;
+    }
+    return p;
   }
 
   Widget _recentRow(Map t) {

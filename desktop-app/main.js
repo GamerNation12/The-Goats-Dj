@@ -17,13 +17,19 @@ let rpc = null;
 let rpcTrackLabel = '';
 
 function createWindow() {
+  // Linux has no titleBarOverlay: use a normal frame so window controls exist.
+  const isLinux = process.platform === 'linux';
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 840,
     minWidth: 980,
     minHeight: 640,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#09090b', symbolColor: '#ffffff', height: 40 },
+    ...(isLinux
+      ? { frame: true }
+      : {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: { color: '#09090b', symbolColor: '#ffffff', height: 40 },
+        }),
     backgroundColor: '#09090b',
     autoHideMenuBar: true,
     webPreferences: {

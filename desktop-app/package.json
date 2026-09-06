@@ -8,7 +8,9 @@
     "start": "electron .",
     "build:vite": "vite build",
     "build": "npm run build:vite && electron-builder -w",
+    "build:linux": "npm run build:vite && electron-builder -l",
     "release": "npm run build:vite && electron-builder -w -p always",
+    "release:linux": "npm run build:vite && electron-builder -l -p always",
     "typecheck": "tsc --noEmit"
   },
   "build": {
@@ -33,6 +35,11 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png",
+      "category": "Music"
     },
     "nsis": {
       "oneClick": false,

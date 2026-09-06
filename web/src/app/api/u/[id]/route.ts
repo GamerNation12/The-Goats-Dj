@@ -49,6 +49,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id: rawUserId } = await params;
   const userId = decodeURIComponent(rawUserId);
 
+  // Listening period for top stats. Last.fm natively supports these values;
+  // imported (DB) data is filtered by played_at cutoff for the same ranges.
+  const VALID_PERIODS = ["7day", "1month", "3month", "6month", "12month", "overall"] as const;
+  const PERIOD_DAYS: Record<string, number | null> = {
+    "7day": 7,
+    "1month": 30,
+    "3month": 91,
+    "6month": 182,
+    "12month": 365,
+    "overall": null,
+  };
+  let period: (typeof VALID_PERIODS)[number] = "overall";
+  try {
+    const p = new URL(req.url).searchParams.get("period");
+    if (p && (VALID_PERIODS as readonly string[]).includes(p)) period = p as typeof period;
+  } catch { /* default overall */ }
+  const cutoffDays = PERIOD_DAYS[period];
+  const cutoffDate = cutoffDays != null ? new Date(Date.now() - cutoffDays * 24 * 60 * 60 * 1000) : null;
+
   try {
     const sql = postgres(DB_URL!);
     
@@ -141,13 +160,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     let lastfmData = { playcount: 0, topArtists: [] as any[], recentTracks: [] as any[], topTracks: [] as any[], topAlbums: [] as any[] };
     let debugLogs: any[] = [];
 
-    // Fetch Imported Data
+    // Fetch Imported Data (optionally scoped to the requested period)
     if (hasImported && data_source !== 'lastfm_only') {
       try {
         const [playcountRes, topArtistsRes, topTracksRes, recentTracksRes] = await Promise.all([
-          sql`SELECT COUNT(*) as count FROM listens WHERE user_id = ${uId}`,
-          sql`SELECT t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} GROUP BY t.artist_name ORDER BY playcount DESC LIMIT 50`,
-          sql`SELECT t.track_name, t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} GROUP BY t.track_name, t.artist_name ORDER BY playcount DESC LIMIT 50`,
+          cutoffDate
+            ? sql`SELECT COUNT(*) as count FROM listens WHERE user_id = ${uId} AND played_at >= ${cutoffDate}`
+            : sql`SELECT COUNT(*) as count FROM listens WHERE user_id = ${uId}`,
+          cutoffDate
+            ? sql`SELECT t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} AND l.played_at >= ${cutoffDate} GROUP BY t.artist_name ORDER BY playcount DESC LIMIT 50`
+            : sql`SELECT t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} GROUP BY t.artist_name ORDER BY playcount DESC LIMIT 50`,
+          cutoffDate
+            ? sql`SELECT t.track_name, t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} AND l.played_at >= ${cutoffDate} GROUP BY t.track_name, t.artist_name ORDER BY playcount DESC LIMIT 50`
+            : sql`SELECT t.track_name, t.artist_name, COUNT(*) as playcount FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} GROUP BY t.track_name, t.artist_name ORDER BY playcount DESC LIMIT 50`,
           sql`SELECT t.track_name, t.artist_name, l.played_at FROM listens l JOIN tracks t ON l.track_id = t.id WHERE l.user_id = ${uId} ORDER BY l.played_at DESC LIMIT 50`
         ]);
 
@@ -160,15 +185,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
 
-    // Fetch Lastfm Data
+    // Fetch Lastfm Data (tops scoped to the requested period; recents always latest)
     if (lastfm_username && data_source !== 'imported_only') {
       try {
+        const periodParam = period === "overall" ? "" : `&period=${period}`;
         const [infoRes, artistRes, recentRes, tracksRes, albumsRes] = await Promise.all([
           fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getinfo&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json`),
-          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettopartists&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=12`),
+          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettopartists&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=12${periodParam}`),
           fetch(`http://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=10`),
-          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=5`),
-          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettopalbums&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=6`)
+          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettoptracks&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=5${periodParam}`),
+          fetch(`http://ws.audioscrobbler.com/2.0/?method=user.gettopalbums&user=${lastfm_username}&api_key=${LASTFM_API_KEY}&format=json&limit=6${periodParam}`)
         ]);
 
         const infoData = await infoRes.json();
@@ -300,6 +326,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     return NextResponse.json({
       success: true,
+      period,
       lastfm_username: lastfm_username,
       users: discordUsers,
       stats: finalStats,

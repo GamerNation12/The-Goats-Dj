@@ -12,6 +12,7 @@ export interface RecentTrack {
   image?: string;
   nowPlaying?: boolean;
   url?: string;
+  date?: string | null;
 }
 
 export interface TopItem {

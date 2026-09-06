@@ -218,6 +218,27 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
   const [userStatsLoading, setUserStatsLoading] = useState(true);
   const [botStatus, setBotStatus] = useState<string | null>(null);
 
+  // Listening period for top stats (Top Artists / Albums / Tracks).
+  // Recents + insights always reflect the latest activity.
+  const PERIODS = [
+    { value: "7day", label: "7D" },
+    { value: "1month", label: "1M" },
+    { value: "3month", label: "3M" },
+    { value: "6month", label: "6M" },
+    { value: "12month", label: "1Y" },
+    { value: "overall", label: "All" },
+  ];
+  const [period, setPeriod] = useState("overall");
+  const PERIOD_LONG: Record<string, string> = {
+    "7day": "last 7 days",
+    "1month": "last month",
+    "3month": "last 3 months",
+    "6month": "last 6 months",
+    "12month": "last year",
+    "overall": "of all time",
+  };
+  const periodLong = PERIOD_LONG[period] || "of all time";
+
   // Fetch Public Profile Data
   useEffect(() => {
     let isMounted = true;
@@ -225,7 +246,7 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
     
     const fetchProfile = async () => {
       try {
-        const res = await fetchApi(`/api/u/${encodeURIComponent(usernameParam)}?t=${Date.now()}`);
+        const res = await fetchApi(`/api/u/${encodeURIComponent(usernameParam)}?period=${period}&t=${Date.now()}`);
         const data = await res.json();
         if (isMounted) {
           if (data.error) {
@@ -249,7 +270,7 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [usernameParam]);
+  }, [usernameParam, period]);
 
   // Fetch Dashboard Data (only if owner)
   useEffect(() => {
@@ -445,6 +466,23 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
     }
   };
 
+  // Listening insights derived from the latest profile payload.
+  // Recents are always the latest activity, so these stay live on every poll.
+  const insights = (() => {
+    const stats = profile?.stats;
+    const recents: any[] = Array.isArray(stats?.recentTracks) ? stats.recentTracks : [];
+    const now = Date.now();
+    const plays24h = recents.filter((t) => !t.nowPlaying && t.date && now - parseInt(t.date) * 1000 < 24 * 60 * 60 * 1000).length;
+    const uniqueArtists = new Set(recents.map((t) => (t.artist || "").toLowerCase()).filter(Boolean)).size;
+    const nowPlaying = recents.find((t) => t.nowPlaying) || null;
+    const topArtist = stats?.topArtists?.[0] || null;
+    const total = Number(stats?.playcount || 0);
+    const share = topArtist && total > 0 ? Math.min(100, (Number(topArtist.playcount || 0) / total) * 100) : 0;
+    const nextMilestone = total < 10 ? 10 : Math.pow(10, Math.ceil(Math.log10(total + 1)));
+    const milestonePct = Math.min(100, (total / nextMilestone) * 100);
+    return { plays24h, uniqueArtists, nowPlaying, topArtist, total, share, nextMilestone, milestonePct };
+  })();
+
   if (profileLoading || status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b]">
@@ -607,12 +645,76 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
 
         {/* --- PROFILE TAB --- */}
         {(!isOwner || activeTab === "profile") && profile && !profileError && (
+          <>
+          {/* Period selector for Top Artists / Albums / Tracks */}
+          <div className="flex flex-wrap items-center gap-2 mb-6">
+            <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 mr-1">Tops:</span>
+            {PERIODS.map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  period === p.value
+                    ? "bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]"
+                    : "bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Listening insights */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl p-5 shadow-xl">
+              <div className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest mb-1">Last 24 hours</div>
+              <div className="text-3xl font-black text-white">{insights.plays24h}</div>
+              <div className="text-xs text-zinc-400 mt-1">plays scrobbled</div>
+            </div>
+            <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl p-5 shadow-xl">
+              <div className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest mb-1">In rotation</div>
+              <div className="text-3xl font-black text-white">{insights.uniqueArtists}</div>
+              <div className="text-xs text-zinc-400 mt-1">artists in recents</div>
+            </div>
+            <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl p-5 shadow-xl">
+              <div className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest mb-1">Top artist share</div>
+              <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+                {insights.share.toFixed(1)}%
+              </div>
+              <div className="text-xs text-zinc-400 mt-1 truncate">{insights.topArtist?.name || "—"}</div>
+            </div>
+            <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl p-5 shadow-xl">
+              <div className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest mb-1">
+                Next milestone · {insights.nextMilestone.toLocaleString()}
+              </div>
+              <div className="text-3xl font-black text-white">{(insights.nextMilestone - insights.total).toLocaleString()}</div>
+              <div className="text-xs text-zinc-400 mt-1 mb-2">plays to go</div>
+              <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
+                  style={{ width: `${insights.milestonePct}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {insights.nowPlaying && (
+            <div className="mb-8 bg-green-500/5 border border-green-500/20 rounded-2xl px-5 py-3.5 flex items-center gap-4">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0" />
+              <p className="text-sm text-zinc-300 truncate">
+                <span className="font-bold text-white">{insights.nowPlaying.name}</span>
+                <span className="text-zinc-500"> — {insights.nowPlaying.artist}</span>
+              </p>
+              <span className="ml-auto text-[10px] font-black uppercase tracking-widest text-green-400 shrink-0">Now playing</span>
+            </div>
+          )}
+
           <div className="grid lg:grid-cols-2 gap-8 items-start animate-fade-in">
             {/* Top Artists Grid */}
             <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
                <div className="px-6 sm:px-8 py-5 border-b border-white/5 bg-white/[0.01]">
                  <h3 className="text-xl font-bold flex items-center gap-2">⭐ Top Artists</h3>
-                 <p className="text-zinc-400 text-sm mt-1">{isOwner ? "Your most listened to artists of all time." : "Their most listened to artists of all time."}</p>
+                  <p className="text-zinc-400 text-sm mt-1">{isOwner ? `Your most listened artists ${periodLong}.` : `Their most listened artists ${periodLong}.`}</p>
                </div>
                <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                  {profile.stats?.topArtists?.length > 0 ? profile.stats.topArtists.map((artist: any, i: number) => (
@@ -687,7 +789,7 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
             <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
                <div className="px-6 sm:px-8 py-5 border-b border-white/5 bg-white/[0.01]">
                  <h3 className="text-xl font-bold flex items-center gap-2"><img src="https://cdn.discordapp.com/emojis/1527125818713837701.gif" alt="VinylRecord" className="w-6 h-6 inline-block" /> Top Albums</h3>
-                 <p className="text-zinc-400 text-sm mt-1">{isOwner ? "Your most listened to albums of all time." : "Their most listened to albums of all time."}</p>
+                  <p className="text-zinc-400 text-sm mt-1">{isOwner ? `Your most listened albums ${periodLong}.` : `Their most listened albums ${periodLong}.`}</p>
                </div>
                <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                  {profile.stats?.topAlbums?.length > 0 ? profile.stats.topAlbums.map((album: any, i: number) => (
@@ -719,7 +821,7 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
             <div className="bg-zinc-950/40 backdrop-blur-3xl border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
                <div className="px-8 py-6 border-b border-white/5 bg-white/[0.01]">
                  <h3 className="text-xl font-bold flex items-center gap-2">🔥 Top Tracks</h3>
-                 <p className="text-zinc-400 text-sm mt-1">{isOwner ? "Your most played individual songs." : "Their most played individual songs."}</p>
+                  <p className="text-zinc-400 text-sm mt-1">{isOwner ? `Your most played songs ${periodLong}.` : `Their most played songs ${periodLong}.`}</p>
                </div>
                <div className="divide-y divide-white/5">
                  {profile.stats?.topTracks?.length > 0 ? profile.stats.topTracks.map((track: any, i: number) => (
@@ -750,11 +852,12 @@ export default function CombinedProfileDashboard({ params }: { params: Promise<{
                    <div className="text-center py-8 text-zinc-500">No top tracks found.</div>
                  )}
                </div>
-            </div>
-          </div>
-        )}
+             </div>
+           </div>
+          </>
+         )}
 
-        {isOwner && activeTab === "profile" && profileError && (
+         {isOwner && activeTab === "profile" && profileError && (
           <div className="text-center p-8 text-zinc-500 bg-zinc-900/30 rounded-3xl border border-white/5 border-dashed">
             {profileError}
           </div>

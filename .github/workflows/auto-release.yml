@@ -23,6 +23,11 @@ on:
         required: true
         type: boolean
         default: false
+      build_linux:
+        description: 'Build Linux App (.AppImage/.deb)'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   build-and-release:
@@ -126,5 +131,49 @@ jobs:
             desktop-app/dist2/*.exe.blockmap
             desktop-app/dist2/latest.yml
             android-app/build/app/outputs/flutter-apk/DJ-Scratch.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    # Runs after the Windows job so version bumps are already pushed to main.
+    needs: build-and-release
+    if: ${{ github.event.inputs.build_linux == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve release tag
+        id: tag
+        working-directory: desktop-app
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "TAG=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install Desktop App Dependencies
+        working-directory: desktop-app
+        run: npm install
+
+      - name: Build Linux packages
+        working-directory: desktop-app
+        run: npm run build:vite && npx electron-builder -l --publish never
+
+      - name: Upload Linux assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: DJ Scratch ${{ steps.tag.outputs.TAG }}
+          draft: false
+          prerelease: false
+          files: |
+            desktop-app/dist2/*.AppImage
+            desktop-app/dist2/*.deb
+            desktop-app/dist2/latest-linux.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

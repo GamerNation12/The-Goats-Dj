@@ -34,6 +34,21 @@ export default function DashboardPage({ token, username }: { token: string | nul
     (t) => !query || `${t.name} ${t.artist}`.toLowerCase().includes(query.toLowerCase())
   );
 
+  const insights = (() => {
+    const all = stats?.recentTracks || [];
+    const now = Date.now();
+    const plays24h = all.filter((t) => {
+      const uts = Number(t.date || 0);
+      return !t.nowPlaying && uts > 0 && now - uts * 1000 < 24 * 60 * 60 * 1000;
+    }).length;
+    const uniqueArtists = new Set(all.map((t) => (t.artist || '').toLowerCase()).filter(Boolean)).size;
+    const topArtist = stats?.topArtists?.[0] || null;
+    const total = Number(stats?.playcount || 0);
+    const share = topArtist && total > 0 ? Math.min(100, (Number(topArtist.playcount || 0) / total) * 100) : 0;
+    const next = total < 10 ? 10 : Math.pow(10, Math.ceil(Math.log10(total + 1)));
+    return { plays24h, uniqueArtists, topArtist, total, share, next, pct: Math.min(100, (total / next) * 100) };
+  })();
+
   return (
     <div className="animate-fade-in max-w-5xl mx-auto pb-28">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
@@ -74,6 +89,36 @@ export default function DashboardPage({ token, username }: { token: string | nul
             <Card className="p-7">
               <div className="text-zinc-400 text-xs font-bold uppercase tracking-widest mb-2">Top track ({period})</div>
               <div className="text-2xl font-bold truncate">{stats.topTracks?.[0]?.name || '—'}</div>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            <Card className="p-5">
+              <div className="text-zinc-400 text-[11px] font-bold uppercase tracking-widest mb-1">Last 24 hours</div>
+              <div className="text-3xl font-black">{insights.plays24h}</div>
+              <div className="text-xs text-zinc-500 mt-1">plays scrobbled</div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-zinc-400 text-[11px] font-bold uppercase tracking-widest mb-1">In rotation</div>
+              <div className="text-3xl font-black">{insights.uniqueArtists}</div>
+              <div className="text-xs text-zinc-500 mt-1">artists in recents</div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-zinc-400 text-[11px] font-bold uppercase tracking-widest mb-1">Top artist share</div>
+              <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+                {insights.share.toFixed(1)}%
+              </div>
+              <div className="text-xs text-zinc-500 mt-1 truncate">{insights.topArtist?.name || '—'}</div>
+            </Card>
+            <Card className="p-5">
+              <div className="text-zinc-400 text-[11px] font-bold uppercase tracking-widest mb-1">
+                To {insights.next.toLocaleString()}
+              </div>
+              <div className="text-3xl font-black">{(insights.next - insights.total).toLocaleString()}</div>
+              <div className="text-xs text-zinc-500 mt-1 mb-2">plays to go</div>
+              <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" style={{ width: `${insights.pct}%` }} />
+              </div>
             </Card>
           </div>
 

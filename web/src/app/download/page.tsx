@@ -73,6 +73,7 @@ export default function DownloadPage() {
             {releases.map((release, idx) => {
               const exeAsset = release.assets.find((a: any) => a.name.endsWith('.exe'));
               const apkAsset = release.assets.find((a: any) => a.name.endsWith('.apk'));
+              const linuxAsset = release.assets.find((a: any) => a.name.endsWith('.AppImage')) || release.assets.find((a: any) => a.name.endsWith('.deb'));
               const isLatest = idx === 0;
 
               return (
@@ -163,6 +164,31 @@ export default function DownloadPage() {
                           </div>
                           <div>
                             <div className="font-bold text-zinc-400 leading-tight">Android</div>
+                            <div className="text-xs text-zinc-500 mt-1">Not available</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {linuxAsset ? (
+                        <a
+                          href={linuxAsset.browser_download_url}
+                          className="flex items-center gap-4 bg-amber-500 hover:bg-amber-400 transition-colors p-4 rounded-2xl group/btn"
+                        >
+                          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                          </div>
+                          <div>
+                            <div className="font-bold text-white leading-tight">Linux</div>
+                            <div className="text-xs text-amber-100 mt-1">{linuxAsset.name.endsWith('.deb') ? '.deb' : '.AppImage'} • {(linuxAsset.size / 1024 / 1024).toFixed(1)} MB</div>
+                          </div>
+                        </a>
+                      ) : (
+                        <div className="flex items-center gap-4 bg-zinc-800/50 p-4 rounded-2xl opacity-50 cursor-not-allowed border border-white/5">
+                          <div className="w-10 h-10 bg-zinc-700 rounded-xl flex items-center justify-center shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-500"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+                          </div>
+                          <div>
+                            <div className="font-bold text-zinc-400 leading-tight">Linux</div>
                             <div className="text-xs text-zinc-500 mt-1">Not available</div>
                           </div>
                         </div>
